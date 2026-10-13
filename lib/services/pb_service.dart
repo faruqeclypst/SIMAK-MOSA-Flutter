@@ -1,6 +1,24 @@
+import 'dart:async';
+
 import 'package:characters/characters.dart';
+import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// HTTP client dengan batas waktu: request yang hang (mis. jaringan
+/// ngeblok/drop paket) tidak menggantung selamanya, melainkan
+/// melempar TimeoutException setelah 20 detik.
+class _TimeoutClient extends http.BaseClient {
+  final http.Client _inner = http.Client();
+  static const _batas = Duration(seconds: 20);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      _inner.send(request).timeout(_batas);
+
+  @override
+  void close() => _inner.close();
+}
 
 /// Akses terpusat ke backend PocketBase SIMAK-MOSA.
 /// Base URL menunjuk ke instance pb-simak di VPS.
@@ -21,7 +39,11 @@ class PbService {
       initial: prefs.getString('pb_auth'),
       clear: () async => prefs.remove('pb_auth'),
     );
-    pb = PocketBase(baseUrl, authStore: store);
+    pb = PocketBase(
+      baseUrl,
+      authStore: store,
+      httpClientFactory: _TimeoutClient.new,
+    );
     _ready = true;
     if (pb.authStore.isValid) {
       try {

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 
 import '../services/pb_service.dart';
 import '../theme/app_theme.dart';
@@ -40,8 +43,12 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const MainShell()),
       );
     } catch (e) {
+      // Bedakan gagal koneksi vs salah kredensial agar user tahu masalahnya.
+      final koneksiGagal = e is TimeoutException || e is http.ClientException;
       setState(() {
-        _error = 'Gagal masuk. Periksa email/username dan kata sandi.';
+        _error = koneksiGagal
+            ? 'Tidak dapat terhubung ke server. Periksa koneksi internet, lalu coba lagi.'
+            : 'Gagal masuk. Periksa email/username dan kata sandi.';
         _loading = false;
       });
     }
