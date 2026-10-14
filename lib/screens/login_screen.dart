@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
+import 'package:pocketbase/pocketbase.dart';
 
 import '../services/pb_service.dart';
 import '../theme/app_theme.dart';
 import 'main_shell.dart';
 
-/// Layar login SIMAK-MOSA (auth PocketBase).
+/// Layar login SIMAK-MOSA (auth PocketBase) dengan UI modern & fresh.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -28,7 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final id = _identity.text.trim();
     final pw = _password.text;
     if (id.isEmpty || pw.isEmpty) {
-      setState(() => _error = 'Isi email/username dan kata sandi dulu.');
+      setState(() => _error = 'Isi email/username dan kata sandi terlebih dahulu.');
       return;
     }
     setState(() {
@@ -43,12 +43,25 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const MainShell()),
       );
     } catch (e) {
-      // Bedakan gagal koneksi vs salah kredensial agar user tahu masalahnya.
-      final koneksiGagal = e is TimeoutException || e is http.ClientException;
+      String msg;
+      if (e is TimeoutException) {
+        msg = 'Koneksi ke server waktu habis (timeout). Periksa jaringan internet.';
+      } else if (e is ClientException) {
+        if (e.statusCode == 0) {
+          msg = 'Tidak dapat terhubung ke server PocketBase. Periksa koneksi internet.';
+        } else if (e.statusCode == 400) {
+          msg = 'Email/username atau kata sandi tidak cocok.';
+        } else {
+          final resMsg = e.response['message']?.toString();
+          msg = (resMsg != null && resMsg.isNotEmpty)
+              ? 'Gagal masuk: $resMsg'
+              : 'Gagal masuk (${e.statusCode}). Periksa email/username dan kata sandi.';
+        }
+      } else {
+        msg = 'Gagal masuk: $e';
+      }
       setState(() {
-        _error = koneksiGagal
-            ? 'Tidak dapat terhubung ke server. Periksa koneksi internet, lalu coba lagi.'
-            : 'Gagal masuk. Periksa email/username dan kata sandi.';
+        _error = msg;
         _loading = false;
       });
     }
@@ -64,155 +77,337 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(28),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                        width: 84,
-                        height: 84,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.primaryDark],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFE8F8EA),
+              Color(0xFFF9FBFA),
+              Colors.white,
+            ],
+            stops: [0.0, 0.45, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header Logo & Branding
+                    Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00C853), Color(0xFF00820F)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(26),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
                           ),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.35),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.school_rounded,
+                        color: Colors.white,
+                        size: 46,
+                      ),
+                    )
+                        .animate()
+                        .scale(
+                          begin: const Offset(0.7, 0.7),
+                          duration: 500.ms,
+                          curve: Curves.easeOutBack,
+                        )
+                        .fadeIn(),
+                    const SizedBox(height: 20),
+
+                    Text(
+                      'SIMAK-MOSA',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.6,
+                        color: AppColors.ink,
+                      ),
+                    ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.15, end: 0),
+                    const SizedBox(height: 6),
+
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'SMAN Modal Bangsa',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryDark,
+                        ),
+                      ),
+                    ).animate().fadeIn(delay: 180.ms),
+                    const SizedBox(height: 28),
+
+                    // Card Form Login
+                    Container(
+                      padding: const EdgeInsets.all(26),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: AppColors.line),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Selamat Datang',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Silakan masuk dengan akun guru / staf Anda.',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              color: AppColors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+
+                          // Input Username / Email
+                          TextField(
+                            controller: _identity,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                            decoration: InputDecoration(
+                              labelText: 'Email atau Username',
+                              hintText: 'nama@sekolah.sch.id',
+                              labelStyle: GoogleFonts.plusJakartaSans(
+                                color: AppColors.grey,
+                                fontSize: 13,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.person_outline,
+                                color: AppColors.primary,
+                                size: 22,
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFB),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: AppColors.line),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: AppColors.line),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 1.8,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Input Password
+                          TextField(
+                            controller: _password,
+                            obscureText: _obscure,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _masuk(),
+                            style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                            decoration: InputDecoration(
+                              labelText: 'Kata Sandi',
+                              labelStyle: GoogleFonts.plusJakartaSans(
+                                color: AppColors.grey,
+                                fontSize: 13,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                color: AppColors.primary,
+                                size: 22,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscure
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: AppColors.grey,
+                                  size: 20,
+                                ),
+                                onPressed: () => setState(() => _obscure = !_obscure),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFB),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: AppColors.line),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(color: AppColors.line),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 1.8,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+
+                          // Error alert
+                          if (_error != null) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.redSoft,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: AppColors.red.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    color: AppColors.red,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      _error!,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        color: AppColors.red,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
-                        ),
-                        child: const Icon(
-                          Icons.school_rounded,
-                          color: Colors.white,
-                          size: 44,
-                        ),
-                      )
-                      .animate()
-                      .scale(
-                        begin: const Offset(0.6, 0.6),
-                        duration: 600.ms,
-                        curve: Curves.elasticOut,
-                      )
-                      .fadeIn(duration: 400.ms),
-                  const SizedBox(height: 24),
-                  Text(
-                        'SIMAK-MOSA',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                          color: AppColors.ink,
-                        ),
-                      )
-                      .animate()
-                      .fadeIn(delay: 150.ms, duration: 500.ms)
-                      .slideY(begin: 0.2, end: 0),
-                  const SizedBox(height: 6),
-                  Text(
-                        'Sistem Informasi Manajemen Akademik\nSMAN Modal Bangsa',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 14,
-                          color: AppColors.grey,
-                          height: 1.5,
-                        ),
-                      )
-                      .animate()
-                      .fadeIn(delay: 250.ms, duration: 500.ms)
-                      .slideY(begin: 0.2, end: 0),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: _identity,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Email / Username',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: _password,
-                    obscureText: _obscure,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _masuk(),
-                    decoration: InputDecoration(
-                      labelText: 'Kata Sandi',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscure
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.redSoft,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            color: AppColors.red,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _error!,
-                              style: GoogleFonts.plusJakartaSans(
-                                color: AppColors.red,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+
+                          const SizedBox(height: 24),
+
+                          // Tombol Masuk dengan gradasi segar
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF00C853), Color(0xFF00AA13)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.35),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: _loading ? null : _masuk,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  child: Center(
+                                    child: _loading
+                                        ? const SizedBox(
+                                            width: 22,
+                                            height: 22,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : Text(
+                                            'Masuk ke SIMAK',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                              letterSpacing: 0.2,
+                                            ),
+                                          ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ],
                       ),
+                    ).animate().fadeIn(delay: 250.ms).slideY(begin: 0.12, end: 0),
+
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.verified_user_outlined,
+                          size: 16,
+                          color: AppColors.grey,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Akses Khusus Guru & Tenaga Kependidikan',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppColors.grey,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _loading ? null : _masuk,
-                    child: _loading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Masuk'),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Akun dibuat oleh admin sekolah.\nHubungi admin jika belum punya akun.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      color: AppColors.grey,
-                      height: 1.6,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

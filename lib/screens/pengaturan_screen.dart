@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/notifikasi.dart';
 import '../services/pb_service.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
@@ -119,6 +120,53 @@ class PengaturanScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(builder: (_) => const GantiPasswordScreen()),
               );
+            },
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'NOTIFIKASI & DERING',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+              color: AppColors.grey,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _MenuItem(
+            icon: Icons.notifications_active_outlined,
+            label: 'Uji Dering & Getar Notifikasi',
+            warna: AppColors.primary,
+            onTap: () async {
+              await tesNotifikasiSuara();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      '🔔 Notifikasi terkirim dengan dering & getar! Cek bilah notifikasi HP.',
+                    ),
+                    backgroundColor: AppColors.primary,
+                  ),
+                );
+              }
+            },
+          ),
+          _MenuItem(
+            icon: Icons.security_update_good_outlined,
+            label: 'Cek Izin Notifikasi Sistem',
+            onTap: () async {
+              final granted = await requestIzinNotifikasi();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      granted
+                          ? 'Izin notifikasi aktif.'
+                          : 'Izin notifikasi belum diizinkan oleh sistem HP.',
+                    ),
+                  ),
+                );
+              }
             },
           ),
           const SizedBox(height: 20),

@@ -497,13 +497,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             TextButton(
-                              onPressed: () {
-                                Navigator.push(
+                              onPressed: () async {
+                                final ok = await Navigator.push<bool>(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const JurnalFormScreen(),
+                                    builder: (_) => JurnalFormScreen(
+                                      kelasIdAwal: j.getStringValue('kelas'),
+                                      jamAwal: jamKe,
+                                      materiAwal: j.getStringValue('mapel'),
+                                    ),
                                   ),
                                 );
+                                if (ok == true) _muat();
                               },
                               style: TextButton.styleFrom(
                                 backgroundColor: Colors.white,
@@ -612,13 +617,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: _AksiButton(
                                 label: 'Isi Jurnal',
                                 icon: Icons.edit_note_outlined,
-                                onTap: () {
-                                  Navigator.push(
+                                onTap: () async {
+                                  final ok = await Navigator.push<bool>(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => const JurnalFormScreen(),
                                     ),
                                   );
+                                  if (ok == true) _muat();
                                 },
                               ),
                             ),

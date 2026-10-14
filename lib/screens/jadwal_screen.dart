@@ -6,7 +6,8 @@ import '../services/pb_service.dart';
 import '../theme/app_theme.dart';
 import 'jurnal_form_screen.dart';
 
-// Jadwal hari ini dari PocketBase + tombol isi jurnal per kelas.
+// Jadwal Pelajaran komprehensif: pemilih hari (Senin-Sabtu),
+// filter "Jadwal Saya" vs "Semua Kelas", pencarian mapel/guru, dan aksi cepat isi jurnal.
 class JadwalScreen extends StatefulWidget {
   const JadwalScreen({super.key});
 
@@ -15,135 +16,418 @@ class JadwalScreen extends StatefulWidget {
 }
 
 class _JadwalScreenState extends State<JadwalScreen> {
-  List<RecordModel> _data = [];
+  static const _daftarHari = [
+    'Senin',
+    'Selasa',
+    'Rabu',
+    'Kamis',
+    'Jumat',
+    'Sabtu',
+  ];
+
+  late String _hariTerpilih;
+  bool _hanyaJadwalSaya = false;
+  String? _filterKelasId;
+  String _cariMapel = '';
+
+  List<RecordModel> _jadwalList = [];
+  List<RecordModel> _kelasList = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _muat();
+    final h = PbService().hariIni();
+    _hariTerpilih = _daftarHari.contains(h) ? h : 'Senin';
+    _muatKelas();
+    _muatJadwal();
   }
 
-  Future<void> _muat() async {
+  Future<void> _muatKelas() async {
+    try {
+      final pb = PbService().pb;
+      final k = await pb
+          .collection('kelas')
+          .getList(page: 1, perPage: 100, sort: 'nama');
+      if (mounted) setState(() => _kelasList = k.items);
+    } catch (_) {}
+  }
+
+  Future<void> _muatJadwal() async {
     setState(() => _loading = true);
     try {
-      final hari = PbService().hariIni();
-      final res = await PbService().pb
+      final pb = PbService().pb;
+      final res = await pb
           .collection('jadwal')
           .getList(
             page: 1,
-            perPage: 100,
-            filter: 'hari = "$hari"',
-            sort: 'jam_ke',
+            perPage: 300,
+            filter: 'hari = "$_hariTerpilih"',
+            sort: 'jam_ke,kelas.nama',
             expand: 'kelas,guru',
           );
-      setState(() {
-        _data = res.items;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _jadwalList = res.items;
+          _loading = false;
+        });
+      }
     } catch (_) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  int _menitMulaiJam(int jamKe) => 7 * 60 + (jamKe - 1) * 45;
+
+  String _fmtMenit(int m) =>
+      '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
+
+  String _rentangJam(int jamKe) {
+    final mulai = _menitMulaiJam(jamKe);
+    return '${_fmtMenit(mulai)} - ${_fmtMenit(mulai + 45)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final hari = PbService().hariIni();
+    final svc = PbService();
+    final meId = svc.me?.id;
+
+    // Filter list
+    final listTampil = _jadwalList.where((j) {
+      if (_hanyaJadwalSaya && meId != null) {
+        if (j.getStringValue('guru') != meId) return false;
+      }
+      if (_filterKelasId != null && _filterKelasId!.isNotEmpty) {
+        if (j.getStringValue('kelas') != _filterKelasId) return false;
+      }
+      if (_cariMapel.isNotEmpty) {
+        final m = j.getStringValue('mapel').toLowerCase();
+        final g = j.getStringValue('expand.guru.nama_lengkap').toLowerCase();
+        final k = j.getStringValue('expand.kelas.nama').toLowerCase();
+        final q = _cariMapel.toLowerCase();
+        if (!m.contains(q) && !g.contains(q) && !k.contains(q)) return false;
+      }
+      return true;
+    }).toList();
+
     return Scaffold(
-      appBar: AppBar(title: Text('Jadwal • $hari')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _muat,
-              color: AppColors.primary,
-              child: _data.isEmpty
-                  ? ListView(
-                      padding: const EdgeInsets.all(32),
-                      children: [
-                        const Icon(
-                          Icons.event_available_outlined,
-                          size: 64,
-                          color: AppColors.grey,
+      appBar: AppBar(title: const Text('Jadwal Pelajaran')),
+      body: Column(
+        children: [
+          // Baris Pemilih Hari (Senin - Sabtu)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: AppColors.line)),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _daftarHari.map((h) {
+                  final aktif = h == _hariTerpilih;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(h),
+                      selected: aktif,
+                      selectedColor: AppColors.primary,
+                      backgroundColor: const Color(0xFFF4F6F5),
+                      labelStyle: GoogleFonts.plusJakartaSans(
+                        color: aktif ? Colors.white : AppColors.ink,
+                        fontWeight: aktif ? FontWeight.w700 : FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: aktif ? AppColors.primary : Colors.transparent,
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Tidak ada jadwal hari $hari.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.grey,
-                            fontSize: 15,
-                          ),
+                      ),
+                      onSelected: (sel) {
+                        if (sel) {
+                          setState(() => _hariTerpilih = h);
+                          _muatJadwal();
+                        }
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+
+          // Baris Filter & Pencarian
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+            child: Column(
+              children: [
+                TextField(
+                  onChanged: (v) => setState(() => _cariMapel = v.trim()),
+                  decoration: InputDecoration(
+                    hintText: 'Cari mapel, guru, kelas...',
+                    prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.grey),
+                    filled: true,
+                    fillColor: const Color(0xFFF4F6F5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF4F6F5),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                      ],
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(20),
-                      itemCount: _data.length,
-                      itemBuilder: (_, i) {
-                        final j = _data[i];
-                        final namaKelas = j.getStringValue('expand.kelas.nama');
-                        final kelasId = j.getStringValue('kelas');
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 14),
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.line),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primarySoft,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: _kelasList.any((k) => k.id == _filterKelasId)
+                                ? _filterKelasId
+                                : null,
+                            hint: Text(
+                              'Pilih Kelas',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                            items: [
+                              DropdownMenuItem(
+                                value: null,
                                 child: Text(
-                                  'Jam ke-${j.getIntValue('jam_ke')}',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: AppColors.primaryDark,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
+                                  'Semua Kelas',
+                                  style: GoogleFonts.plusJakartaSans(fontSize: 12),
+                                ),
+                              ),
+                              ..._kelasList.map(
+                                (k) => DropdownMenuItem(
+                                  value: k.id,
+                                  child: Text(
+                                    k.getStringValue('nama'),
+                                    style: GoogleFonts.plusJakartaSans(fontSize: 12),
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 10),
-                              Text(
-                                '${j.getStringValue('mapel')} • Kelas $namaKelas',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => JurnalFormScreen(
-                                          kelasIdAwal: kelasId,
+                            ],
+                            onChanged: (v) => setState(() => _filterKelasId = v),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        label: const Text('Jadwal Saya'),
+                        selected: _hanyaJadwalSaya,
+                        selectedColor: AppColors.primarySoft,
+                        labelStyle: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _hanyaJadwalSaya
+                              ? AppColors.primaryDark
+                              : AppColors.ink,
+                        ),
+                        onSelected: (val) {
+                          setState(() => _hanyaJadwalSaya = val);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Daftar Jadwal
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: _muatJadwal,
+                    color: AppColors.primary,
+                    child: listTampil.isEmpty
+                        ? ListView(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(40),
+                                child: Center(
+                                  child: Column(
+                                    children: [
+                                      const Icon(
+                                        Icons.calendar_month_outlined,
+                                        size: 56,
+                                        color: AppColors.grey,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Tidak ada jadwal untuk kriteria ini.',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.grey,
                                         ),
                                       ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.edit_note_outlined),
-                                  label: const Text('Isi Jurnal Kelas'),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            itemCount: listTampil.length,
+                            itemBuilder: (_, i) {
+                              final j = listTampil[i];
+                              final namaKelas =
+                                  j.getStringValue('expand.kelas.nama');
+                              final namaGuru =
+                                  j.getStringValue('expand.guru.nama_lengkap');
+                              final mapel = j.getStringValue('mapel');
+                              final jamKe = j.getIntValue('jam_ke');
+                              final kelasId = j.getStringValue('kelas');
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.line),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.02),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEFF6FF),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            'Jam ke-$jamKe • ${_rentangJam(jamKe)}',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              color: AppColors.blue,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primarySoft,
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            'Kelas $namaKelas',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              color: AppColors.primaryDark,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      mapel,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.ink,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.person_outline,
+                                          size: 16,
+                                          color: AppColors.grey,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            namaGuru.isNotEmpty
+                                                ? namaGuru
+                                                : 'Guru Pengampu',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 13,
+                                              color: AppColors.grey,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 14),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: FilledButton.tonalIcon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => JurnalFormScreen(
+                                                kelasIdAwal: kelasId,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(
+                                          Icons.edit_note_outlined,
+                                          size: 18,
+                                        ),
+                                        label: const Text('Isi Jurnal Kelas'),
+                                        style: FilledButton.styleFrom(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 10,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
-            ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -25,6 +25,8 @@ class _MainShellState extends State<MainShell> {
   bool _adaPengingat = false;
   int _unreadChat = 0;
   Function? _unsubChat;
+  Function? _unsubPengumuman;
+  Function? _unsubKejadian;
 
   @override
   void initState() {
@@ -32,12 +34,58 @@ class _MainShellState extends State<MainShell> {
     _cekPengingat();
     _cekUnreadChat();
     _pantauChat();
+    _pantauPengumuman();
+    _pantauKejadian();
   }
 
   @override
   void dispose() {
     _unsubChat?.call();
+    _unsubPengumuman?.call();
+    _unsubKejadian?.call();
     super.dispose();
+  }
+
+  /// Pantau pengumuman baru dari sekolah
+  Future<void> _pantauPengumuman() async {
+    try {
+      final svc = PbService();
+      _unsubPengumuman = await svc.pb
+          .collection('pengumuman')
+          .subscribe('*', (e) async {
+            if (e.action != 'create' || e.record == null) return;
+            final rec = e.record!;
+            await notifPengumumanBaru(
+              judul: rec.getStringValue('judul'),
+              isi: rec.getStringValue('isi'),
+            );
+          });
+    } catch (_) {}
+  }
+
+  /// Pantau kejadian mendesak / Cap on Spot baru
+  Future<void> _pantauKejadian() async {
+    try {
+      final svc = PbService();
+      _unsubKejadian = await svc.pb
+          .collection('kejadian')
+          .subscribe('*', (e) async {
+            if (e.action != 'create' || e.record == null) return;
+            final rec = e.record!;
+            final meId = svc.me?.id;
+            if (meId != null && rec.getStringValue('pelapor') == meId) return;
+            var namaPelapor = rec.getStringValue('expand.pelapor.nama_lengkap');
+            if (namaPelapor.isEmpty) {
+              namaPelapor = rec.getStringValue('expand.pelapor.name');
+            }
+            if (namaPelapor.isEmpty) namaPelapor = 'Warga Sekolah';
+            await notifKejadianBaru(
+              judul: rec.getStringValue('judul'),
+              kategori: rec.getStringValue('kategori'),
+              pelapor: namaPelapor,
+            );
+          }, expand: 'pelapor');
+    } catch (_) {}
   }
 
   /// Pantau pesan baru: tandai diterima, notifikasi, update badge.

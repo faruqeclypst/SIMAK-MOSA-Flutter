@@ -784,110 +784,357 @@ class _JadwalTabState extends State<_JadwalTab> {
       ).showSnackBar(const SnackBar(content: Text('Tambah data kelas dulu.')));
       return;
     }
-    final mapel = TextEditingController(
+
+    String hari = rec?.getStringValue('hari') ?? _hari;
+    if (!_daftarHari.contains(hari)) hari = _daftarHari.first;
+
+    String kelasId = rec?.getStringValue('kelas') ?? '';
+    if (kelasId.isEmpty || !_kelas.any((k) => k.id == kelasId)) {
+      kelasId = _kelas.first.id;
+    }
+
+    // Toggle on/off jam 1..8
+    final Set<int> jamTerpilih = <int>{};
+    if (rec != null) {
+      final jk = rec.getIntValue('jam_ke');
+      if (jk >= 1 && jk <= 8) {
+        jamTerpilih.add(jk);
+      } else if (jk > 0) {
+        jamTerpilih.add(jk);
+      }
+    } else {
+      jamTerpilih.add(1);
+    }
+
+    final customMapel = TextEditingController(
       text: rec?.getStringValue('mapel') ?? '',
     );
+    bool manualMapel = false;
     String mapelVal = rec?.getStringValue('mapel') ?? '';
-    if (_mapel.isNotEmpty &&
-        !_mapel.any((m) => m.getStringValue('nama') == mapelVal)) {
-      mapelVal = _mapel.first.getStringValue('nama');
+    final mapelOptions = _mapel
+        .map((m) => m.getStringValue('nama'))
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
+    if (_mapel.isNotEmpty) {
+      if (mapelVal.isNotEmpty && !mapelOptions.contains(mapelVal)) {
+        manualMapel = true;
+      } else if (mapelVal.isEmpty && mapelOptions.isNotEmpty) {
+        mapelVal = mapelOptions.first;
+      }
+    } else {
+      manualMapel = true;
     }
-    final jam = TextEditingController(
-      text: rec?.getIntValue('jam_ke').toString() ?? '1',
-    );
-    String hari = rec?.getStringValue('hari') ?? _hari;
-    String kelasId = rec?.getStringValue('kelas') ?? _kelas.first.id;
-    String? guruId = rec?.getStringValue('guru').isEmpty == true
-        ? null
-        : rec?.getStringValue('guru');
+
+    String? guruId = rec?.getStringValue('guru');
+    if (guruId != null && guruId.isEmpty) guruId = null;
+    if (guruId != null && !_guru.any((u) => u.id == guruId)) guruId = null;
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          title: Text(rec == null ? 'Tambah Jadwal' : 'Edit Jadwal'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: hari,
-                  decoration: const InputDecoration(labelText: 'Hari'),
-                  items: _daftarHari
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
-                  onChanged: (x) => setS(() => hari = x ?? _hari),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: kelasId,
-                  decoration: const InputDecoration(labelText: 'Kelas'),
-                  items: _kelas
-                      .map(
-                        (k) => DropdownMenuItem(
-                          value: k.id,
-                          child: Text(k.getStringValue('nama')),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (x) => setS(() => kelasId = x ?? kelasId),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: jam,
-                  decoration: const InputDecoration(labelText: 'Jam Ke'),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 12),
-                if (_mapel.isEmpty)
-                  TextField(
-                    controller: mapel,
-                    decoration: const InputDecoration(
-                      labelText: 'Mata Pelajaran',
-                    ),
-                  )
-                else
+          title: Row(
+            children: [
+              Icon(
+                rec == null ? Icons.add_alarm : Icons.edit_calendar,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(rec == null ? 'Tambah Jadwal' : 'Edit Jadwal'),
+            ],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Hari
                   DropdownButtonFormField<String>(
-                    initialValue: mapelVal.isEmpty ? null : mapelVal,
+                    key: ValueKey('hari_$hari'),
+                    initialValue: hari,
+                    isExpanded: true,
                     decoration: const InputDecoration(
-                      labelText: 'Mata Pelajaran',
+                      labelText: 'Hari',
+                      prefixIcon: Icon(Icons.calendar_today_outlined, size: 20),
                     ),
-                    items: _mapel
+                    items: _daftarHari
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (x) => setS(() => hari = x ?? _hari),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Kelas
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('kelas_$kelasId'),
+                    initialValue: kelasId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Pilih Kelas',
+                      prefixIcon: Icon(Icons.school_outlined, size: 20),
+                    ),
+                    items: _kelas
                         .map(
-                          (m) => DropdownMenuItem(
-                            value: m.getStringValue('nama'),
-                            child: Text(
-                              m.getStringValue('kode').isEmpty
-                                  ? m.getStringValue('nama')
-                                  : '${m.getStringValue('nama')} (${m.getStringValue('kode')})',
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          (k) => DropdownMenuItem(
+                            value: k.id,
+                            child: Text(k.getStringValue('nama')),
                           ),
                         )
                         .toList(),
-                    onChanged: (x) => setS(() => mapelVal = x ?? mapelVal),
+                    onChanged: (x) {
+                      if (x != null) {
+                        setS(() => kelasId = x);
+                      }
+                    },
                   ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: guruId,
-                  decoration: const InputDecoration(
-                    labelText: 'Guru (opsional)',
+                  const SizedBox(height: 16),
+
+                  // Toggle Jam Pelajaran 1..8
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Jam Pelajaran (1 - 8):',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                InkWell(
+                                  onTap: () => setS(() {
+                                    jamTerpilih.addAll([1, 2, 3, 4, 5, 6, 7, 8]);
+                                  }),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    child: Text(
+                                      'Semua',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const Text(' • ', style: TextStyle(color: AppColors.grey)),
+                                InkWell(
+                                  onTap: () => setS(() => jamTerpilih.clear()),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    child: Text(
+                                      'Reset',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(8, (index) {
+                            final j = index + 1;
+                            final aktif = jamTerpilih.contains(j);
+                            return InkWell(
+                              onTap: () {
+                                setS(() {
+                                  if (aktif) {
+                                    jamTerpilih.remove(j);
+                                  } else {
+                                    jamTerpilih.add(j);
+                                  }
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                width: 38,
+                                height: 38,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: aktif ? AppColors.primary : Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: aktif ? AppColors.primaryDark : Colors.grey.shade300,
+                                    width: aktif ? 1.5 : 1,
+                                  ),
+                                  boxShadow: aktif
+                                      ? [
+                                          BoxShadow(
+                                            color: AppColors.primary.withValues(alpha: 0.3),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Text(
+                                  '$j',
+                                  style: TextStyle(
+                                    color: aktif ? Colors.white : AppColors.ink,
+                                    fontWeight: aktif ? FontWeight.bold : FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 8),
+                        if (jamTerpilih.isEmpty)
+                          const Text(
+                            '⚠️ Pilih minimal satu jam pelajaran.',
+                            style: TextStyle(
+                              color: AppColors.red,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          )
+                        else
+                          Text(
+                            'Aktif: Jam ke-${(jamTerpilih.toList()..sort()).join(", ")} (${jamTerpilih.length} JP)',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                  items: _guru
-                      .map(
-                        (u) => DropdownMenuItem(
-                          value: u.id,
-                          child: Text(
-                            u.getStringValue('nama_lengkap').isEmpty
-                                ? u.getStringValue('email')
-                                : u.getStringValue('nama_lengkap'),
+                  const SizedBox(height: 14),
+
+                  // Mata Pelajaran
+                  if (_mapel.isEmpty || manualMapel) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: customMapel,
+                            decoration: const InputDecoration(
+                              labelText: 'Mata Pelajaran',
+                              prefixIcon: Icon(Icons.menu_book_outlined, size: 20),
+                              hintText: 'Misal: Matematika, IPA, dll',
+                            ),
                           ),
                         ),
-                      )
-                      .toList(),
-                  onChanged: (x) => setS(() => guruId = x),
-                ),
-              ],
+                        if (_mapel.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            tooltip: 'Pilih dari daftar Master Mapel',
+                            icon: const Icon(Icons.list_alt, color: AppColors.primary),
+                            onPressed: () {
+                              setS(() {
+                                manualMapel = false;
+                                if (mapelVal.isEmpty && mapelOptions.isNotEmpty) {
+                                  mapelVal = mapelOptions.first;
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey('mapel_$mapelVal'),
+                            initialValue: mapelOptions.contains(mapelVal)
+                                ? mapelVal
+                                : (mapelOptions.isNotEmpty ? mapelOptions.first : null),
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Mata Pelajaran',
+                              prefixIcon: Icon(Icons.menu_book_outlined, size: 20),
+                            ),
+                            items: mapelOptions
+                                .map(
+                                  (m) => DropdownMenuItem(
+                                    value: m,
+                                    child: Text(m, overflow: TextOverflow.ellipsis),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (x) => setS(() => mapelVal = x ?? mapelVal),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Ketik manual nama mapel',
+                          icon: const Icon(Icons.edit_note, color: AppColors.primary),
+                          onPressed: () {
+                            setS(() {
+                              manualMapel = true;
+                              customMapel.text = mapelVal;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+
+                  // Guru
+                  DropdownButtonFormField<String?>(
+                    key: ValueKey('guru_$guruId'),
+                    initialValue: (_guru.any((u) => u.id == guruId)) ? guruId : null,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Guru (opsional)',
+                      prefixIcon: Icon(Icons.person_outline, size: 20),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text(
+                          '(Tanpa Guru / Kosong)',
+                          style: TextStyle(
+                            color: AppColors.grey,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                      ..._guru.map(
+                        (u) {
+                          var nama = u.getStringValue('nama_lengkap');
+                          if (nama.isEmpty) nama = u.getStringValue('email');
+                          if (nama.isEmpty) nama = '-';
+                          return DropdownMenuItem<String?>(
+                            value: u.id,
+                            child: Text(nama, overflow: TextOverflow.ellipsis),
+                          );
+                        },
+                      ),
+                    ],
+                    onChanged: (x) => setS(() => guruId = x),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -895,34 +1142,130 @@ class _JadwalTabState extends State<_JadwalTab> {
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Batal'),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Simpan'),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () {
+                if (jamTerpilih.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Pilih minimal satu jam pelajaran.'),
+                      backgroundColor: AppColors.red,
+                    ),
+                  );
+                  return;
+                }
+                final finalNama = manualMapel ? customMapel.text.trim() : mapelVal.trim();
+                if (finalNama.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Mata pelajaran tidak boleh kosong.'),
+                      backgroundColor: AppColors.red,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text('Simpan'),
             ),
           ],
         ),
       ),
     );
+
     if (ok == true && mounted) {
+      final finalNamaMapel = manualMapel ? customMapel.text.trim() : mapelVal.trim();
+      if (jamTerpilih.isEmpty || finalNamaMapel.isEmpty) return;
+
+      final sortedJam = jamTerpilih.toList()..sort();
+      final targetHari = hari;
+      final targetKelasId = kelasId;
+      final targetGuruId = (guruId?.isNotEmpty == true) ? guruId : null;
+
+      setState(() => _loading = true);
       try {
-        final body = {
-          'hari': hari,
-          'kelas': kelasId,
-          'jam_ke': int.tryParse(jam.text.trim()) ?? 1,
-          'mapel': _mapel.isEmpty ? mapel.text.trim() : mapelVal,
-          if (guruId case final g) 'guru': g,
-        };
-        if (rec == null) {
-          await PbService().pb.collection('jadwal').create(body: body);
-        } else {
-          await PbService().pb.collection('jadwal').update(rec.id, body: body);
+        final pb = PbService().pb;
+        // Ambil jadwal yang sudah ada untuk hari & kelas tersebut
+        final existingRes = await pb.collection('jadwal').getList(
+          page: 1,
+          perPage: 100,
+          filter: 'hari = "$targetHari" && kelas = "$targetKelasId"',
+        );
+        final existingMap = <int, RecordModel>{};
+        for (final item in existingRes.items) {
+          existingMap[item.getIntValue('jam_ke')] = item;
         }
-        _muat();
-      } catch (_) {
+
+        final Set<String> updatedRecordIds = {};
+
+        // Jika sedang mengedit rec dan jam aslinya tidak lagi dipilih di jamTerpilih:
+        if (rec != null && !sortedJam.contains(rec.getIntValue('jam_ke'))) {
+          final firstJam = sortedJam.first;
+          final clash = existingMap[firstJam];
+          if (clash != null && clash.id != rec.id) {
+            await pb.collection('jadwal').delete(clash.id);
+          }
+          await pb.collection('jadwal').update(rec.id, body: {
+            'hari': targetHari,
+            'kelas': targetKelasId,
+            'jam_ke': firstJam,
+            'mapel': finalNamaMapel,
+            'guru': targetGuruId ?? '',
+          });
+          updatedRecordIds.add(rec.id);
+          existingMap[firstJam] = rec;
+        }
+
+        for (final j in sortedJam) {
+          final body = {
+            'hari': targetHari,
+            'kelas': targetKelasId,
+            'jam_ke': j,
+            'mapel': finalNamaMapel,
+            'guru': targetGuruId ?? '',
+          };
+
+          // Jika rec masih cocok dengan jam ini:
+          if (rec != null && rec.getIntValue('jam_ke') == j && !updatedRecordIds.contains(rec.id)) {
+            await pb.collection('jadwal').update(rec.id, body: body);
+            updatedRecordIds.add(rec.id);
+            continue;
+          }
+
+          final existingItem = existingMap[j];
+          if (existingItem != null && !updatedRecordIds.contains(existingItem.id)) {
+            await pb.collection('jadwal').update(existingItem.id, body: body);
+            updatedRecordIds.add(existingItem.id);
+          } else if (existingItem == null || !updatedRecordIds.contains(existingItem.id)) {
+            await pb.collection('jadwal').create(body: body);
+          }
+        }
+
+        if (_hari != targetHari) {
+          _hari = targetHari;
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Gagal menyimpan jadwal.')),
+            SnackBar(
+              content: Text('Jadwal berhasil disimpan (${sortedJam.length} JP).'),
+              backgroundColor: AppColors.primary,
+            ),
           );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal menyimpan jadwal: $e'),
+              backgroundColor: AppColors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          _muat();
         }
       }
     }

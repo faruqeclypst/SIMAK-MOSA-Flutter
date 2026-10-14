@@ -364,7 +364,9 @@ class _FormAsramaState extends State<_FormAsrama> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  initialValue: _kelasId,
+                  key: ValueKey(_kelasId),
+                  initialValue: _kelas.any((k) => k.id == _kelasId) ? _kelasId : null,
+                  isExpanded: true,
                   hint: const Text('Pilih kelas'),
                   items: _kelas
                       .map(
@@ -388,7 +390,9 @@ class _FormAsramaState extends State<_FormAsrama> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  initialValue: _siswaId,
+                  key: ValueKey(_siswaId),
+                  initialValue: _siswa.any((s) => s.id == _siswaId) ? _siswaId : null,
+                  isExpanded: true,
                   hint: Text(
                     _kelasId == null ? 'Pilih kelas dulu' : 'Pilih siswa/i',
                   ),
