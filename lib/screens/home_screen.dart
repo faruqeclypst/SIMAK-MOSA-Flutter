@@ -775,64 +775,117 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               else
-                ..._jadwalHariIni.take(3).map((j) {
-                  final namaKelas = j.getStringValue('expand.kelas.nama');
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.line),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(13),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${j.getIntValue('jam_ke')}',
-                              style: GoogleFonts.plusJakartaSans(
-                                color: AppColors.primaryDark,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 18,
-                              ),
+                ...() {
+                  final sumber = _jadwalSaya.isNotEmpty ? _jadwalSaya : _jadwalHariIni;
+                  final Map<String, List<RecordModel>> groups = {};
+                  for (final rec in sumber) {
+                    final kId = rec.getStringValue('kelas');
+                    final mapel = rec.getStringValue('mapel').trim().toLowerCase();
+                    final key = '$kId|#|$mapel';
+                    groups.putIfAbsent(key, () => []).add(rec);
+                  }
+
+                  final List<_HomeJadwalItem> sesiList = [];
+                  for (final entry in groups.entries) {
+                    final recs = entry.value;
+                    recs.sort(
+                      (a, b) => a.getIntValue('jam_ke').compareTo(b.getIntValue('jam_ke')),
+                    );
+                    List<RecordModel> currentRun = [];
+                    for (final r in recs) {
+                      if (currentRun.isEmpty) {
+                        currentRun.add(r);
+                      } else {
+                        final prevJam = currentRun.last.getIntValue('jam_ke');
+                        final thisJam = r.getIntValue('jam_ke');
+                        if (thisJam == prevJam + 1) {
+                          currentRun.add(r);
+                        } else {
+                          sesiList.add(_HomeJadwalItem.fromRun(currentRun));
+                          currentRun = [r];
+                        }
+                      }
+                    }
+                    if (currentRun.isNotEmpty) {
+                      sesiList.add(_HomeJadwalItem.fromRun(currentRun));
+                    }
+                  }
+                  sesiList.sort((a, b) => a.jamMulai.compareTo(b.jamMulai));
+
+                  return sesiList.take(3).map((s) {
+                    return InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => JurnalFormScreen(
+                              kelasIdAwal: s.kelasId,
+                              jamAwal: s.jamMulai,
+                              mapelAwal: s.mapel,
                             ),
                           ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.line),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                j.getStringValue('mapel'),
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  s.durasiJp > 1 ? '${s.durasiJp} JP' : '${s.jamMulai}',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: AppColors.primaryDark,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: s.durasiJp > 1 ? 13 : 18,
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Kelas $namaKelas • Jam ke-${j.getIntValue('jam_ke')}',
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: AppColors.grey,
-                                  fontSize: 13,
-                                ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    s.mapel,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Kelas ${s.namaKelas} • ${s.labelJam} (${s.durasiJp} JP)',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: AppColors.grey,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                            const Icon(Icons.chevron_right, color: AppColors.grey),
+                          ],
                         ),
-                        const Icon(Icons.chevron_right, color: AppColors.grey),
-                      ],
-                    ),
-                  );
-                }),
+                      ),
+                    );
+                  });
+                }(),
               const SizedBox(height: 18),
               const InstagramSection(),
               const SizedBox(height: 18),
@@ -1429,5 +1482,39 @@ class _ServiceTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _HomeJadwalItem {
+  final String kelasId;
+  final String namaKelas;
+  final String mapel;
+  final List<int> jamList;
+
+  _HomeJadwalItem({
+    required this.kelasId,
+    required this.namaKelas,
+    required this.mapel,
+    required this.jamList,
+  });
+
+  factory _HomeJadwalItem.fromRun(List<RecordModel> run) {
+    final first = run.first;
+    final namaKelas = first.getStringValue('expand.kelas.nama');
+    return _HomeJadwalItem(
+      kelasId: first.getStringValue('kelas'),
+      namaKelas: namaKelas.isNotEmpty ? namaKelas : '-',
+      mapel: first.getStringValue('mapel'),
+      jamList: run.map((r) => r.getIntValue('jam_ke')).toList(),
+    );
+  }
+
+  int get durasiJp => jamList.length;
+  int get jamMulai => jamList.isNotEmpty ? jamList.first : 0;
+  int get jamSelesai => jamList.isNotEmpty ? jamList.last : 0;
+
+  String get labelJam {
+    if (jamList.length == 1) return 'Jam ke-${jamList.first}';
+    return 'Jam ke-${jamList.first}–${jamList.last}';
   }
 }

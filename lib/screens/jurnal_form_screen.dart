@@ -771,6 +771,52 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
                             );
                           }).toList(),
                         ),
+                        if (_jamTerpilih.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.access_time_rounded,
+                                  size: 15,
+                                  color: AppColors.primaryDark,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  () {
+                                    final sorted = _jamTerpilih.toList()..sort();
+                                    final count = sorted.length;
+                                    bool isConsecutive = true;
+                                    for (int i = 0; i < sorted.length - 1; i++) {
+                                      if (sorted[i + 1] != sorted[i] + 1) {
+                                        isConsecutive = false;
+                                        break;
+                                      }
+                                    }
+                                    final range = (isConsecutive && sorted.length > 1)
+                                        ? 'Jam ke-${sorted.first} s/d ${sorted.last}'
+                                        : 'Jam ke-${sorted.join(", ")}';
+                                    return '$range • Total: $count JP';
+                                  }(),
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primaryDark,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
