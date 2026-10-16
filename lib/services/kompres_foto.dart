@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -5,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 // Kompres foto sebelum diunggah: maks 1280px sisi terpanjang, kualitas 75.
 // Semua unggahan foto di aplikasi WAJIB lewat sini agar hemat kuota & storage.
 Future<XFile> kompresFoto(XFile file) async {
+  if (kIsWeb) return file;
   try {
     final dir = await getTemporaryDirectory();
     final target =

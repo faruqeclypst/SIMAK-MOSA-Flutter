@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -19,10 +18,14 @@ const _channelId = 'simak_utama_v1';
 const _channelName = 'Notifikasi SIMAK-MOSA';
 const _channelDesc = 'Pemberitahuan pesan chat, pengumuman sekolah, dan kejadian penting.';
 
-// Pola getar HP: jeda 0ms, getar 400ms, jeda 200ms, getar 400ms (pola dering jelas)
-final _vibratePattern = Int64List.fromList([0, 400, 200, 400]);
+// Pola getar HP: jeda 0ms, getar 400ms, jeda 200ms, getar 400ms (pola dering jelas).
+// Int64List tidak didukung di web (akan crash Unsupported operation: Int64List not supported on the web).
+Int64List? get _vibratePattern =>
+    kIsWeb ? null : Int64List.fromList([0, 400, 200, 400]);
 
 Future<void> initNotifikasi() async {
+  if (kIsWeb) return;
+
   const android = AndroidInitializationSettings('@mipmap/ic_launcher');
   const ios = DarwinInitializationSettings(
     requestAlertPermission: true,
@@ -71,6 +74,7 @@ Future<void> initNotifikasi() async {
 
 /// Minta izin notifikasi secara manual (dipanggil dari halaman pengaturan).
 Future<bool> requestIzinNotifikasi() async {
+  if (kIsWeb) return false;
   final androidPlugin = _notif
       .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin
@@ -87,6 +91,7 @@ Future<void> notifPesanMasuk({
   required String namaPengirim,
   required String isi,
 }) async {
+  if (kIsWeb) return;
   if (roomAktif == roomId) return; // sedang dibuka, tidak perlu notifikasi
 
   await _notif.show(
@@ -121,6 +126,8 @@ Future<void> notifPengumumanBaru({
   required String judul,
   required String isi,
 }) async {
+  if (kIsWeb) return;
+
   await _notif.show(
     _idNotif++,
     '📢 Pengumuman: $judul',
@@ -154,6 +161,8 @@ Future<void> notifKejadianBaru({
   required String kategori,
   required String pelapor,
 }) async {
+  if (kIsWeb) return;
+
   await _notif.show(
     _idNotif++,
     '⚡ [$kategori] $judul',
@@ -183,6 +192,8 @@ Future<void> notifKejadianBaru({
 
 /// Uji coba dering & getar langsung di perangkat.
 Future<void> tesNotifikasiSuara() async {
+  if (kIsWeb) return;
+
   await _notif.show(
     9999,
     '🔔 Tes Dering SIMAK-MOSA',
