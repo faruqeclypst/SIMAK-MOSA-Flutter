@@ -106,8 +106,9 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
       if (_filterQuery.isEmpty) return true;
       final kelas = j.getStringValue('expand.kelas.nama').toLowerCase();
       final materi = j.getStringValue('materi').toLowerCase();
+      final mapel = j.getStringValue('mapel').toLowerCase();
       final q = _filterQuery.toLowerCase();
-      return kelas.contains(q) || materi.contains(q);
+      return kelas.contains(q) || materi.contains(q) || mapel.contains(q);
     }).toList();
 
     return Scaffold(
@@ -214,24 +215,53 @@ class _RiwayatScreenState extends State<RiwayatScreen> {
                                                   ),
                                                 ],
                                               ),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                  vertical: 4,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.primarySoft,
-                                                  borderRadius:
-                                                      BorderRadius.circular(20),
-                                                ),
-                                                child: Text(
-                                                  'Kelas $namaKelas',
-                                                  style: GoogleFonts.plusJakartaSans(
-                                                    color: AppColors.primaryDark,
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 12,
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  if (j.getStringValue('mapel').isNotEmpty) ...[
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 3,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFFEFF6FF),
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        border: Border.all(
+                                                          color: const Color(0xFFBFDBFE),
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        j.getStringValue('mapel'),
+                                                        style: GoogleFonts.plusJakartaSans(
+                                                          color: const Color(0xFF1D4ED8),
+                                                          fontWeight: FontWeight.w700,
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                  ],
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.primarySoft,
+                                                      borderRadius:
+                                                          BorderRadius.circular(20),
+                                                    ),
+                                                    child: Text(
+                                                      'Kelas $namaKelas',
+                                                      style: GoogleFonts.plusJakartaSans(
+                                                        color: AppColors.primaryDark,
+                                                        fontWeight: FontWeight.w700,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
+                                                ],
                                               ),
                                             ],
                                           ),
@@ -476,7 +506,7 @@ class _DetailJurnalSheetState extends State<_DetailJurnalSheet> {
                             ),
                           ),
                           Text(
-                            'Jam ke-$jam • Guru: ${namaGuru.isNotEmpty ? namaGuru : "Guru"}',
+                            '${widget.jurnal.getStringValue('mapel').isNotEmpty ? "${widget.jurnal.getStringValue('mapel')} • " : ""}Jam ke-$jam • Guru: ${namaGuru.isNotEmpty ? namaGuru : "Guru"}',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 13,
                               color: AppColors.grey,

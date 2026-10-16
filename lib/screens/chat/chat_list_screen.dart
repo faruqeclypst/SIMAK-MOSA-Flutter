@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pocketbase/pocketbase.dart';
 
@@ -7,7 +6,9 @@ import '../../services/pb_service.dart';
 import '../../theme/app_theme.dart';
 import 'chat_room_screen.dart';
 
-// Daftar chat ala WA: grup & chat langsung, badge unread, buat baru.
+// Layar Daftar Chat ala Telegram:
+// Tab filter (Semua, Pribadi, Grup), pencarian percakapan,
+// Telegram FAB pen button, status online/aktif, unread counter badge.
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
@@ -24,11 +25,21 @@ class _RoomRow {
 class _ChatListScreenState extends State<ChatListScreen> {
   List<_RoomRow> _rooms = [];
   bool _loading = true;
+  String _filterTab = 'Semua';
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+  bool _isSearching = false;
 
   @override
   void initState() {
     super.initState();
     _muat();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _muat() async {
@@ -45,18 +56,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
             filter: 'anggota ~ "$meId"',
             sort: '-waktu_terakhir,-created',
           );
-      // peta terakhir dibaca per room
+
+      // Peta waktu terakhir dibaca per room
       final baca = await pb
           .collection('chat_baca')
-          .getList(
-            page: 1,
-            perPage: 200,
-            filter: 'user = "$meId"',
-          );
+          .getList(page: 1, perPage: 200, filter: 'user = "$meId"');
+
       final petaBaca = {
         for (final b in baca.items)
           b.getStringValue('room'): b.getStringValue('terakhir'),
       };
+
       final rows = <_RoomRow>[];
       for (final r in res.items) {
         var unread = 0;
@@ -74,12 +84,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
         } catch (_) {}
         rows.add(_RoomRow(r, unread));
       }
-      setState(() {
-        _rooms = rows;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _rooms = rows;
+          _loading = false;
+        });
+      }
     } catch (_) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -93,9 +105,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
           '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
       if (tgl == hariIni) return jam;
       if (tgl == hariIni.subtract(const Duration(days: 1))) return 'Kemarin';
-      return '${d.day}/${d.month}/${d.year}';
+      return '${d.day}/${d.month}';
     } catch (_) {
       return '';
+    }
+  }
+
+  bool _isOnline(String iso) {
+    if (iso.isEmpty) return false;
+    try {
+      final d = DateTime.parse(iso).toLocal();
+      return DateTime.now().difference(d).inMinutes < 5;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -110,60 +132,89 @@ class _ChatListScreenState extends State<ChatListScreen> {
     await showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: AppColors.primarySoft,
-                child: Icon(Icons.group_add_outlined, color: AppColors.primary),
-              ),
-              title: Text(
-                'Grup baru',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w700,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              subtitle: Text(
-                'Buat grup koordinasi',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  color: AppColors.grey,
+              ListTile(
+                leading: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.group_add_rounded,
+                    color: AppColors.primary,
+                  ),
                 ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _formGrup();
-              },
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: AppColors.blueSoft,
-                child: Icon(Icons.person_add_outlined, color: AppColors.blue),
-              ),
-              title: Text(
-                'Chat langsung',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w700,
+                title: Text(
+                  'Grup Baru',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
                 ),
-              ),
-              subtitle: Text(
-                'Chat 1 lawan 1',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  color: AppColors.grey,
+                subtitle: Text(
+                  'Buat ruang koordinasi antarguru/staf',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: AppColors.grey,
+                  ),
                 ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _formGrup();
+                },
               ),
-              onTap: () {
-                Navigator.pop(context);
-                _pilihLangsung();
-              },
-            ),
-            const SizedBox(height: 12),
-          ],
+              ListTile(
+                leading: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE0F2FE),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.person_add_alt_1_rounded,
+                    color: Color(0xFF0284C7),
+                  ),
+                ),
+                title: Text(
+                  'Chat Langsung',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+                subtitle: Text(
+                  'Mulai percakapan privat 1 lawan 1',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: AppColors.grey,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pilihLangsung();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -191,38 +242,48 @@ class _ChatListScreenState extends State<ChatListScreen> {
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          title: const Text('Grup Baru'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'Buat Grup Baru',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800),
+          ),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextField(
                     controller: namaCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Nama grup',
-                      hintText: 'mis. Piket Senin',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Anggota',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
+                    decoration: InputDecoration(
+                      labelText: 'Nama Grup',
+                      hintText: 'mis. Tim Kurikulum / Piket Senin',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Pilih Anggota (${terpilih.length} dipilih)',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   ...users.map(
                     (u) => CheckboxListTile(
                       dense: true,
+                      activeColor: AppColors.primary,
                       contentPadding: EdgeInsets.zero,
                       title: Text(
                         _namaUser(u),
-                        style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       subtitle: Text(
                         PbService.peranLabels[u.getStringValue('peran')] ??
@@ -251,14 +312,22 @@ class _ChatListScreenState extends State<ChatListScreen> {
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Batal'),
             ),
-            FilledButton(
+            ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Buat'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Buat Grup'),
             ),
           ],
         ),
       ),
     );
+
     if (ok == true && mounted) {
       if (namaCtrl.text.trim().isEmpty || terpilih.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -271,17 +340,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
       try {
         final svc = PbService();
         final anggota = [svc.me!.id, ...terpilih];
-        final room = await svc.pb
-            .collection('chat_rooms')
-            .create(
-              body: {
-                'nama': namaCtrl.text.trim(),
-                'tipe': 'grup',
-                'anggota': anggota,
-                'waktu_terakhir':
-                    '${svc.tanggalHariIni()} ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:00',
-              },
-            );
+        final room = await svc.pb.collection('chat_rooms').create(
+          body: {
+            'nama': namaCtrl.text.trim(),
+            'tipe': 'grup',
+            'anggota': anggota,
+            'waktu_terakhir':
+                '${svc.tanggalHariIni()} ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:00',
+          },
+        );
         _muat();
         if (mounted) {
           await Navigator.push(
@@ -316,7 +383,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final pilih = await showDialog<RecordModel>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Chat Langsung'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Mulai Chat Langsung',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800),
+        ),
         content: SizedBox(
           width: double.maxFinite,
           child: SingleChildScrollView(
@@ -328,18 +399,21 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: CircleAvatar(
-                        backgroundColor: AppColors.blueSoft,
+                        backgroundColor: const Color(0xFFE0F2FE),
                         child: Text(
                           _inisial(_namaUser(u)),
                           style: GoogleFonts.plusJakartaSans(
                             fontWeight: FontWeight.w800,
-                            color: AppColors.blue,
+                            color: const Color(0xFF0284C7),
                           ),
                         ),
                       ),
                       title: Text(
                         _namaUser(u),
-                        style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       subtitle: Text(
                         PbService.peranLabels[u.getStringValue('peran')] ??
@@ -358,14 +432,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
       ),
     );
+
     if (pilih != null && mounted) {
       try {
         final svc = PbService();
         final meId = svc.me!.id;
-        // cari DM yang sudah ada
-        final ada = await svc.pb
-            .collection('chat_rooms')
-            .getList(
+        final ada = await svc.pb.collection('chat_rooms').getList(
               page: 1,
               perPage: 5,
               filter:
@@ -375,17 +447,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
         if (ada.items.isNotEmpty) {
           roomId = ada.items.first.id;
         } else {
-          final room = await svc.pb
-              .collection('chat_rooms')
-              .create(
-                body: {
-                  'nama': _namaUser(pilih),
-                  'tipe': 'direct',
-                  'anggota': [meId, pilih.id],
-                  'waktu_terakhir':
-                      '${svc.tanggalHariIni()} ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:00',
-                },
-              );
+          final room = await svc.pb.collection('chat_rooms').create(
+            body: {
+              'nama': _namaUser(pilih),
+              'tipe': 'direct',
+              'anggota': [meId, pilih.id],
+              'waktu_terakhir':
+                  '${svc.tanggalHariIni()} ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}:00',
+            },
+          );
           roomId = room.id;
         }
         if (mounted) {
@@ -409,154 +479,302 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Filter pencarian dan tab
+    final terfilter = _rooms.where((row) {
+      final r = row.room;
+      final nama = r.getStringValue('nama').toLowerCase();
+      final preview = r.getStringValue('pesan_terakhir').toLowerCase();
+      final isGrup = r.getStringValue('tipe') == 'grup';
+
+      if (_filterTab == 'Grup' && !isGrup) return false;
+      if (_filterTab == 'Pribadi' && isGrup) return false;
+
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        return nama.contains(q) || preview.contains(q);
+      }
+      return true;
+    }).toList();
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Chat')),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        onPressed: _bukaBaru,
-        child: const Icon(Icons.chat_outlined, color: Colors.white),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: _isSearching
+            ? TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                onChanged: (v) => setState(() => _searchQuery = v),
+                decoration: const InputDecoration(
+                  hintText: 'Cari nama atau pesan...',
+                  border: InputBorder.none,
+                ),
+                style: GoogleFonts.plusJakartaSans(fontSize: 16),
+              )
+            : Text(
+                'Telegram Chat',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 19,
+                ),
+              ),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search_rounded),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _isSearching = false;
+                  _searchCtrl.clear();
+                  _searchQuery = '';
+                } else {
+                  _isSearching = true;
+                }
+              });
+            },
+          ),
+        ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _muat,
-              color: AppColors.primary,
-              child: _rooms.isEmpty
-                  ? ListView(
-                      padding: const EdgeInsets.all(32),
-                      children: [
-                        Container(
-                          width: 96,
-                          height: 96,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primarySoft,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.forum_outlined,
-                            size: 48,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Belum ada percakapan.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Mulai chat dengan piket, guru, atau waka lewat tombol +.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.grey,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    )
-                  : ListView.builder(
-                      itemCount: _rooms.length,
-                      itemBuilder: (_, i) {
-                        final row = _rooms[i];
-                        final r = row.room;
-                        final nama = r.getStringValue('nama');
-                        final preview = r.getStringValue('pesan_terakhir');
-                        final waktu = r.getStringValue('waktu_terakhir');
-                        final isGrup = r.getStringValue('tipe') == 'grup';
-                        return ListTile(
-                              leading: CircleAvatar(
-                                radius: 26,
-                                backgroundColor: isGrup
-                                    ? AppColors.primarySoft
-                                    : AppColors.blueSoft,
-                                child: isGrup
-                                    ? const Icon(
-                                        Icons.group_outlined,
-                                        color: AppColors.primary,
-                                      )
-                                    : Text(
-                                        _inisial(nama),
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontWeight: FontWeight.w800,
-                                          color: AppColors.blue,
-                                        ),
-                                      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF2563EB), // Telegram Blue
+        onPressed: _bukaBaru,
+        elevation: 4,
+        child: const Icon(Icons.edit_rounded, color: Colors.white),
+      ),
+      body: Column(
+        children: [
+          // Filter Tabs (Semua, Pribadi, Grup)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+            ),
+            child: Row(
+              children: ['Semua', 'Pribadi', 'Grup'].map((tab) {
+                final aktif = _filterTab == tab;
+                return GestureDetector(
+                  onTap: () => setState(() => _filterTab = tab),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: aktif
+                          ? const Color(0xFF2563EB)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      tab,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: aktif ? FontWeight.w700 : FontWeight.w500,
+                        color: aktif ? Colors.white : AppColors.grey,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+          // Chat Rows
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: _muat,
+                    color: const Color(0xFF2563EB),
+                    child: terfilter.isEmpty
+                        ? ListView(
+                            padding: const EdgeInsets.all(40),
+                            children: [
+                              Container(
+                                width: 88,
+                                height: 88,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFEFF6FF),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.forum_outlined,
+                                  size: 42,
+                                  color: Color(0xFF2563EB),
+                                ),
                               ),
-                              title: Text(
-                                nama.isEmpty ? '-' : nama,
+                              const SizedBox(height: 16),
+                              Text(
+                                _searchQuery.isNotEmpty
+                                    ? 'Tidak ada obrolan ditemukan.'
+                                    : 'Belum ada percakapan.',
+                                textAlign: TextAlign.center,
                                 style: GoogleFonts.plusJakartaSans(
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 15,
+                                  fontSize: 16,
                                 ),
                               ),
-                              subtitle: Text(
-                                preview.isEmpty ? 'Mulai percakapan' : preview,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              const SizedBox(height: 6),
+                              Text(
+                                'Ketuk ikon pensil di bawah untuk memulai chat baru.',
+                                textAlign: TextAlign.center,
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 13,
                                   color: AppColors.grey,
+                                  fontSize: 13,
                                 ),
                               ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    _fmtWaktu(waktu),
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 11,
-                                      color: row.unread > 0
-                                          ? AppColors.primary
-                                          : AppColors.grey,
-                                      fontWeight: row.unread > 0
-                                          ? FontWeight.w700
-                                          : FontWeight.w400,
+                            ],
+                          )
+                        : ListView.separated(
+                            itemCount: terfilter.length,
+                            separatorBuilder: (context, index) => const Divider(
+                              indent: 74,
+                              height: 1,
+                              color: Color(0xFFF1F5F9),
+                            ),
+                            itemBuilder: (_, i) {
+                              final row = terfilter[i];
+                              final r = row.room;
+                              final nama = r.getStringValue('nama');
+                              final preview = r.getStringValue('pesan_terakhir');
+                              final waktu = r.getStringValue('waktu_terakhir');
+                              final isGrup = r.getStringValue('tipe') == 'grup';
+
+                              return ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 4,
+                                ),
+                                leading: Stack(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 25,
+                                      backgroundColor: isGrup
+                                          ? const Color(0xFFDCFCE7)
+                                          : const Color(0xFFDBEAFE),
+                                      child: isGrup
+                                          ? const Icon(
+                                              Icons.groups_rounded,
+                                              color: Color(0xFF16A34A),
+                                              size: 26,
+                                            )
+                                          : Text(
+                                              _inisial(nama),
+                                              style:
+                                                  GoogleFonts.plusJakartaSans(
+                                                fontWeight: FontWeight.w800,
+                                                color: const Color(0xFF2563EB),
+                                                fontSize: 16,
+                                              ),
+                                            ),
                                     ),
-                                  ),
-                                  if (row.unread > 0) ...[
-                                    const SizedBox(height: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 3,
-                                      ),
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Text(
-                                        '${row.unread}',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w800,
+                                    if (!isGrup && _isOnline(waktu))
+                                      Positioned(
+                                        right: 1,
+                                        bottom: 1,
+                                        child: Container(
+                                          width: 12,
+                                          height: 12,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF22C55E),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 2,
+                                            ),
+                                          ),
                                         ),
+                                      ),
+                                  ],
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        nama.isEmpty ? '-' : nama,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 15,
+                                          color: AppColors.ink,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      _fmtWaktu(waktu),
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 11,
+                                        color: row.unread > 0
+                                            ? const Color(0xFF2563EB)
+                                            : AppColors.grey,
+                                        fontWeight: row.unread > 0
+                                            ? FontWeight.w700
+                                            : FontWeight.w400,
                                       ),
                                     ),
                                   ],
-                                ],
-                              ),
-                              onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        ChatRoomScreen(roomId: r.id),
-                                  ),
-                                );
-                                _muat();
-                              },
-                            )
-                            .animate()
-                            .fadeIn(delay: Duration(milliseconds: i * 50));
-                      },
-                    ),
+                                ),
+                                subtitle: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        preview.isEmpty
+                                            ? 'Mulai percakapan'
+                                            : preview,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 13,
+                                          color: row.unread > 0
+                                              ? AppColors.ink
+                                              : AppColors.grey,
+                                          fontWeight: row.unread > 0
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                        ),
+                                      ),
+                                    ),
+                                    if (row.unread > 0)
+                                      Container(
+                                        margin: const EdgeInsets.only(left: 6),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF2563EB),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          '${row.unread}',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          ChatRoomScreen(roomId: r.id),
+                                    ),
+                                  );
+                                  _muat();
+                                },
+                              );
+                            },
+                          ),
                   ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import '../services/notifikasi.dart';
 import '../services/pb_service.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
+import 'onboarding_screen.dart';
 
 // Halaman Pengaturan: ganti kata sandi, tentang, keluar.
 class PengaturanScreen extends StatelessWidget {
@@ -14,7 +15,13 @@ class PengaturanScreen extends StatelessWidget {
   void _tentang(BuildContext context) {
     showAboutDialog(
       context: context,
-      applicationName: 'SIMAK-MOSA',
+      applicationIcon: Image.asset(
+        'assets/images/logo.png',
+        width: 48,
+        height: 48,
+        fit: BoxFit.contain,
+      ),
+      applicationName: 'SIMAK MOSA',
       applicationVersion: '2.0.0 (PocketBase)',
       applicationLegalese: 'SMAN Modal Bangsa',
       children: [
@@ -181,8 +188,20 @@ class PengaturanScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _MenuItem(
+            icon: Icons.auto_stories_outlined,
+            label: 'Panduan & Onboarding Aplikasi',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const OnboardingScreen(isPreviewOnly: true),
+                ),
+              );
+            },
+          ),
+          _MenuItem(
             icon: Icons.info_outline,
-            label: 'Tentang SIMAK-MOSA',
+            label: 'Tentang SIMAK MOSA',
             onTap: () => _tentang(context),
           ),
           _MenuItem(

@@ -15,7 +15,7 @@ String? roomAktif;
 
 // ID Kanal notifikasi Android (gunakan v1 untuk memastikan konfigurasi suara & getar baru terdaftar)
 const _channelId = 'simak_utama_v1';
-const _channelName = 'Notifikasi SIMAK-MOSA';
+const _channelName = 'Notifikasi SIMAK MOSA';
 const _channelDesc = 'Pemberitahuan pesan chat, pengumuman sekolah, dan kejadian penting.';
 
 // Pola getar HP: jeda 0ms, getar 400ms, jeda 200ms, getar 400ms (pola dering jelas).
@@ -196,7 +196,7 @@ Future<void> tesNotifikasiSuara() async {
 
   await _notif.show(
     9999,
-    '🔔 Tes Dering SIMAK-MOSA',
+    '🔔 Tes Dering SIMAK MOSA',
     'Jika terdengar suara & HP bergetar, sistem notifikasi telah aktif sempurna!',
     NotificationDetails(
       android: AndroidNotificationDetails(

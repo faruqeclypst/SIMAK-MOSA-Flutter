@@ -102,52 +102,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Header Logo & Branding
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF00C853), Color(0xFF00820F)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(26),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.35),
-                            blurRadius: 24,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.school_rounded,
-                        color: Colors.white,
-                        size: 46,
-                      ),
+                    Image.asset(
+                      'assets/images/logo_full.png',
+                      height: 115,
+                      fit: BoxFit.contain,
                     )
                         .animate()
                         .scale(
-                          begin: const Offset(0.7, 0.7),
+                          begin: const Offset(0.85, 0.85),
                           duration: 500.ms,
                           curve: Curves.easeOutBack,
                         )
                         .fadeIn(),
-                    const SizedBox(height: 20),
-
-                    Text(
-                      'SIMAK-MOSA',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.6,
-                        color: AppColors.ink,
-                      ),
-                    ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.15, end: 0),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
 
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                       decoration: BoxDecoration(
                         color: AppColors.primarySoft,
                         borderRadius: BorderRadius.circular(20),
@@ -389,6 +359,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(
                           Icons.verified_user_outlined,
@@ -396,12 +367,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: AppColors.grey,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          'Akses Khusus Guru & Tenaga Kependidikan',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.grey,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                        Flexible(
+                          child: Text(
+                            'Akses Khusus Guru & Tenaga Kependidikan',
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              color: AppColors.grey,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ],

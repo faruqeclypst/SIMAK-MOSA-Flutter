@@ -3,9 +3,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pocketbase/pocketbase.dart';
 
-import '../services/laporan_pdf.dart';
 import '../services/pb_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/instagram_section.dart';
 import '../widgets/kabar_sekolah.dart';
 import '../widgets/pengumuman_banner.dart';
 import 'admin/master_data_screen.dart';
@@ -21,6 +21,7 @@ import 'laporan_izin_screen.dart';
 import 'matriks_piket_screen.dart';
 import 'piket_screen.dart';
 import 'riwayat_screen.dart';
+import 'satpam/izin_gerbang_screen.dart';
 import 'search_result_screen.dart';
 
 // Beranda: sapaan + search + pengingat mengajar + ringkasan
@@ -51,6 +52,11 @@ class _HomeScreenState extends State<HomeScreen> {
   int _kelasTerisi = 0;
   int _kelasKosong = 0;
   int _totalKelas = 18;
+  int _jurnalSayaHariIni = 0;
+  int _gerbangDiLuar = 0;
+  int _gerbangMenunggu = 0;
+  int _gerbangTerlambat = 0;
+  int _gerbangTotal = 0;
   bool _loading = true;
   String? _error;
 
@@ -101,11 +107,47 @@ class _HomeScreenState extends State<HomeScreen> {
         _jadwalSaya = jadwal.items
             .where((j) => j.getStringValue('guru') == svc.me!.id)
             .toList();
+        _jurnalSayaHariIni = jurnal.items
+            .where((j) => j.getStringValue('guru') == svc.me?.id)
+            .length;
         _kelasTerisi = kelasIds.length;
         _totalKelas = semuaKelas.items.length;
         _kelasKosong = _totalKelas - _kelasTerisi;
         _loading = false;
       });
+
+      if (svc.isSatpam || svc.canKelolaGerbang) {
+        try {
+          final tkt = await pb.collection('izin_keluar').getList(
+                page: 1,
+                perPage: 200,
+                sort: '-created',
+              );
+          final now = DateTime.now();
+          if (mounted) {
+            setState(() {
+              _gerbangTotal = tkt.items.length;
+              _gerbangDiLuar = tkt.items
+                  .where((t) => t.getStringValue('status') == 'Di Luar Kampus')
+                  .length;
+              _gerbangMenunggu = tkt.items
+                  .where((t) => t.getStringValue('status') == 'Menunggu Keluar')
+                  .length;
+              _gerbangTerlambat = tkt.items.where((t) {
+                if (t.getStringValue('status') == 'Terlambat') return true;
+                if (t.getStringValue('status') == 'Di Luar Kampus') {
+                  final w = t.getStringValue('waktu_kembali');
+                  if (w.isNotEmpty) {
+                    final dt = DateTime.tryParse(w);
+                    if (dt != null && now.isAfter(dt)) return true;
+                  }
+                }
+                return false;
+              }).length;
+            });
+          }
+        } catch (_) {}
+      }
     } catch (_) {
       setState(() {
         _loading = false;
@@ -172,9 +214,18 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'Berhalangan':
         target = const GuruBerhalanganScreen();
       case 'Pengumuman':
-        target = const PengumumanAdminScreen();
+        if (PbService().isAdmin) {
+          target = const PengumumanAdminScreen();
+        } else {
+          widget.onLihatPengumuman?.call();
+          return;
+        }
       case 'Kejadian':
         target = const KejadianScreen();
+      case 'Izin Gerbang':
+        target = const IzinGerbangScreen();
+      case 'Perizinan Siswa':
+        target = const LaporanIzinScreen();
     }
     if (target != null) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => target!));
@@ -255,6 +306,18 @@ class _HomeScreenState extends State<HomeScreen> {
       Color(0xFFD97706),
       Color(0xFFFEF3C7),
     );
+    const izinGerbang = _Layanan(
+      'Izin Gerbang',
+      Icons.confirmation_number_outlined,
+      Color(0xFF0284C7),
+      Color(0xFFE0F2FE),
+    );
+    const perizinanSiswa = _Layanan(
+      'Perizinan Siswa',
+      Icons.assignment_ind_outlined,
+      Color(0xFF0D9488),
+      Color(0xFFCCFBF1),
+    );
 
     switch (svc.peran) {
       case 'admin':
@@ -267,6 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
           berhalangan,
           kejadian,
           asrama,
+          izinGerbang,
           izin,
           keterlambatan,
           pengumuman,
@@ -275,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'kurikulum':
         return [kurikulum, berhalangan, kejadian, riwayat, izin, jadwal];
       case 'asrama':
-        return [asrama, kejadian, izin, jadwal, riwayat];
+        return [asrama, izinGerbang, perizinanSiswa, kejadian, izin, jadwal, riwayat];
       case 'waka':
         return [
           kurikulum,
@@ -289,17 +353,27 @@ class _HomeScreenState extends State<HomeScreen> {
           jadwal,
         ];
       case 'satpam':
-        return [keterlambatan, kejadian, jadwal];
+        return [
+          izinGerbang,
+          perizinanSiswa,
+          keterlambatan,
+          kejadian,
+        ];
       case 'piket':
-        return [piket, matriks, berhalangan, kejadian, jadwal, riwayat, izin];
+        return [piket, izinGerbang, matriks, berhalangan, kejadian, jadwal, riwayat, izin];
       case 'guru':
       default:
-        return [jadwal, riwayat, kurikulum, kejadian, izin];
+        return [
+          jadwal,
+          riwayat,
+          kurikulum,
+          kejadian,
+          izin,
+          matriks,
+          berhalangan,
+          pengumuman,
+        ];
     }
-  }
-
-  void _cetakPdf(BuildContext context) {
-    cetakLaporanMonitoring(context);
   }
 
   @override
@@ -319,6 +393,28 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Brand header
+              Row(
+                children: [
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 30,
+                    height: 30,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'SIMAK MOSA',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.ink,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ).animate().fadeIn(duration: 350.ms),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -407,8 +503,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   .animate()
                   .fadeIn(delay: 100.ms, duration: 400.ms)
                   .slideY(begin: 0.1, end: 0),
-              // Pengingat jam mengajar (untuk guru)
-              if (pengingat.isNotEmpty) ...[
+              // Pengingat jam mengajar (hanya untuk guru yang mengajar, bukan satpam)
+              if (!svc.isSatpam && pengingat.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 ...pengingat.map((j) {
                   final namaKelas = j.getStringValue('expand.kelas.nama');
@@ -541,109 +637,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 }),
               ],
               const SizedBox(height: 18),
-              // Kartu ringkasan dengan gradient
-              Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(22),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF00B818), Color(0xFF00820F)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.35),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(
-                                Icons.insights_outlined,
-                                color: Colors.white,
-                                size: 26,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _loading
-                                        ? 'Memuat...'
-                                        : '$_kelasTerisi Kelas Terisi',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.3,
-                                    ),
-                                  ),
-                                  Text(
-                                    _loading
-                                        ? ''
-                                        : '$_kelasKosong kosong dari $_totalKelas kelas',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.85,
-                                      ),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _AksiButton(
-                                label: 'Isi Jurnal',
-                                icon: Icons.edit_note_outlined,
-                                onTap: () async {
-                                  final ok = await Navigator.push<bool>(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const JurnalFormScreen(),
-                                    ),
-                                  );
-                                  if (ok == true) _muat();
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _AksiButton(
-                                label: 'Cetak PDF',
-                                icon: Icons.download_outlined,
-                                onTap: () => _cetakPdf(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(delay: 200.ms, duration: 500.ms)
-                  .slideY(begin: 0.12, end: 0),
+              // Hero Card Adaptif Berdasarkan Peran:
+              // 1. Piket, Kurikulum, Waka, Admin: Ringkasan 18 Kelas KBM Sekolah
+              // 2. Satpam: Pos Keamanan & Perizinan Gerbang (Siswa di luar kampus & keterlambatan)
+              // 3. Guru Biasa: Jurnal Mengajar Anda Hari Ini
+              if (svc.canLihatMonitoringKelas) ...[
+                _buildCardMonitoringSekolah(),
+              ] else if (svc.isSatpam) ...[
+                _buildCardGerbangSatpam(),
+              ] else ...[
+                _buildCardKbmGuru(),
+              ],
               const SizedBox(height: 26),
               Text(
                 'Layanan',
@@ -829,7 +833,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 }),
-              const SizedBox(height: 8),
+              const SizedBox(height: 18),
+              const InstagramSection(),
+              const SizedBox(height: 18),
               const KabarSekolah(),
               const SizedBox(height: 24),
             ],
@@ -837,6 +843,505 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  // 1. Kartu Ringkasan KBM Agregat Seluruh Sekolah (Piket, Kurikulum, Waka, Admin)
+  Widget _buildCardMonitoringSekolah() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () async {
+          final ok = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const JurnalFormScreen(),
+            ),
+          );
+          if (ok == true) _muat();
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF00AA13), Color(0xFF00750D)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.35),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.insights_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _loading
+                              ? 'Memuat status KBM...'
+                              : '$_kelasTerisi dari $_totalKelas Kelas Terisi',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _loading
+                              ? ''
+                              : '$_kelasKosong ruang kelas belum terisi jurnal hari ini',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white.withValues(
+                              alpha: 0.85,
+                            ),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _totalKelas > 0
+                          ? '${((_kelasTerisi / _totalKelas) * 100).toInt()}%'
+                          : '0%',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: _totalKelas > 0
+                      ? (_kelasTerisi / _totalKelas)
+                      : 0.0,
+                  backgroundColor: Colors.white.withValues(
+                    alpha: 0.25,
+                  ),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Colors.white,
+                  ),
+                  minHeight: 6,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Text(
+                    'Ketuk kartu ini untuk mengisi / pantau jurnal KBM',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Isi Jurnal',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 13,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    )
+    .animate()
+    .fadeIn(delay: 200.ms, duration: 500.ms)
+    .slideY(begin: 0.12, end: 0);
+  }
+
+  // 2. Kartu Pos Keamanan & Perizinan Gerbang Kampus (Satpam / PKD)
+  Widget _buildCardGerbangSatpam() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const IzinGerbangScreen(),
+            ),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0284C7), Color(0xFF0369A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0284C7).withValues(alpha: 0.35),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.shield_outlined,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$_gerbangDiLuar Siswa di Luar Kampus',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$_gerbangMenunggu siap keluar • $_gerbangTerlambat terlambat kembali',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$_gerbangTotal Tiket',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Text(
+                    'Periksa tiket & catat jam keluar-masuk gerbang',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Izin Gerbang',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 13,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    )
+    .animate()
+    .fadeIn(delay: 200.ms, duration: 500.ms)
+    .slideY(begin: 0.12, end: 0);
+  }
+
+  // 3. Kartu Jurnal Mengajar Personal Guru (Khusus Guru Biasa)
+  Widget _buildCardKbmGuru() {
+    final totalJadwal = _jadwalSaya.length;
+    final terisi = _jurnalSayaHariIni;
+    final persen =
+        totalJadwal > 0 ? (terisi / totalJadwal).clamp(0.0, 1.0) : 1.0;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: () async {
+          final ok = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const JurnalFormScreen(),
+            ),
+          );
+          if (ok == true) _muat();
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF00AA13), Color(0xFF00750D)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.35),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.auto_stories_outlined,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          totalJadwal == 0
+                              ? 'Jurnal Mengajar Hari Ini'
+                              : '$terisi dari $totalJadwal Jadwal Terisi',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          totalJadwal == 0
+                              ? 'Tidak ada jadwal mengajar terjadwal hari ini'
+                              : (totalJadwal > terisi
+                                  ? '${totalJadwal - terisi} jadwal mengajar belum diisi jurnal'
+                                  : 'Seluruh jurnal mengajar Anda hari ini selesai'),
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white.withValues(
+                              alpha: 0.85,
+                            ),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      totalJadwal > 0
+                          ? '${(persen * 100).toInt()}%'
+                          : '100%',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: persen,
+                  backgroundColor: Colors.white.withValues(
+                    alpha: 0.25,
+                  ),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Colors.white,
+                  ),
+                  minHeight: 6,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Text(
+                    'Ketuk kartu ini untuk mengisi jurnal kelas',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Isi Jurnal',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 13,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    )
+    .animate()
+    .fadeIn(delay: 200.ms, duration: 500.ms)
+    .slideY(begin: 0.12, end: 0);
   }
 
   String _namaBulan() {
@@ -865,49 +1370,6 @@ class _Layanan {
   final Color warna;
   final Color warnaSoft;
   const _Layanan(this.nama, this.icon, this.warna, this.warnaSoft);
-}
-
-class _AksiButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _AksiButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(28),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: AppColors.primary, size: 20),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ServiceTile extends StatelessWidget {

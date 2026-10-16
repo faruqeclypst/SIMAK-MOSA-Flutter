@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -102,6 +103,12 @@ Future<Uint8List> _bangunPdf({
     return '${int.tryParse(p[2]) ?? p[2]} $namaBulan ${p[0]}';
   }
 
+  pw.MemoryImage? logoImg;
+  try {
+    final assetData = await rootBundle.load('assets/images/logo.png');
+    logoImg = pw.MemoryImage(assetData.buffer.asUint8List());
+  } catch (_) {}
+
   doc.addPage(
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
@@ -109,23 +116,41 @@ Future<Uint8List> _bangunPdf({
       header: (_) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(
-            'SIMAK-MOSA • SMAN Modal Bangsa',
-            style: pw.TextStyle(
-              fontSize: 10,
-              color: abu,
-              fontWeight: pw.FontWeight.bold,
-            ),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'SIMAK MOSA • SMAN Modal Bangsa',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      color: abu,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'Laporan Monitoring KBM',
+                    style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(
+                    '$hari, ${fmtTgl(tanggal)}',
+                    style: const pw.TextStyle(fontSize: 11, color: abu),
+                  ),
+                ],
+              ),
+              if (logoImg != null)
+                pw.Container(
+                  width: 44,
+                  height: 44,
+                  child: pw.Image(logoImg),
+                ),
+            ],
           ),
-          pw.SizedBox(height: 4),
-          pw.Text(
-            'Laporan Monitoring KBM',
-            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.Text(
-            '$hari, ${fmtTgl(tanggal)}',
-            style: const pw.TextStyle(fontSize: 11, color: abu),
-          ),
+          pw.SizedBox(height: 6),
           pw.Divider(thickness: 1.5),
         ],
       ),

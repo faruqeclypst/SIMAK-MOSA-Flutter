@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pocketbase/pocketbase.dart';
 
@@ -16,6 +17,7 @@ class JurnalFormScreen extends StatefulWidget {
   final String? kelasIdAwal;
   final int? jamAwal;
   final String? materiAwal;
+  final String? mapelAwal;
   final String? editJurnalId;
 
   const JurnalFormScreen({
@@ -23,6 +25,7 @@ class JurnalFormScreen extends StatefulWidget {
     this.kelasIdAwal,
     this.jamAwal,
     this.materiAwal,
+    this.mapelAwal,
     this.editJurnalId,
   });
 
@@ -54,6 +57,18 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
   final _scrollCtrl = ScrollController();
   final _formKey = GlobalKey<FormState>();
 
+  List<String> _semuaMapel = [];
+  String? _mapelTerpilih;
+
+  List<String> get _guruMapelList {
+    final raw = PbService().me?.getStringValue('mapel') ?? '';
+    return raw
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
   bool _loading = true;
   bool _saving = false;
 
@@ -65,6 +80,9 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
     }
     if (widget.materiAwal != null && widget.materiAwal!.isNotEmpty) {
       _materiCtrl.text = widget.materiAwal!;
+    }
+    if (widget.mapelAwal != null && widget.mapelAwal!.isNotEmpty) {
+      _mapelTerpilih = widget.mapelAwal;
     }
     _init();
   }
@@ -84,6 +102,22 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
       final k = await pb
           .collection('kelas')
           .getList(page: 1, perPage: 100, sort: 'nama');
+
+      try {
+        final m = await pb.collection('mapel').getFullList(sort: 'nama');
+        _semuaMapel = m
+            .map((e) => e.getStringValue('nama').trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+      } catch (_) {}
+
+      if (_mapelTerpilih == null || _mapelTerpilih!.isEmpty) {
+        if (_guruMapelList.isNotEmpty) {
+          _mapelTerpilih = _guruMapelList.first;
+        } else if (_semuaMapel.isNotEmpty) {
+          _mapelTerpilih = _semuaMapel.first;
+        }
+      }
 
       if (!mounted) return;
       setState(() {
@@ -127,6 +161,10 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
       _kelasId = kelasId;
       _materiCtrl.text = j.getStringValue('materi');
       _catatanCtrl.text = j.getStringValue('catatan');
+      final mapelDb = j.getStringValue('mapel');
+      if (mapelDb.isNotEmpty) {
+        _mapelTerpilih = mapelDb;
+      }
       _jamTerpilih.clear();
       _jamTerpilih.addAll(_parseJam(j.getStringValue('jam')));
 
@@ -293,6 +331,10 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
         _jurnalAda = j;
         _materiCtrl.text = j.getStringValue('materi');
         _catatanCtrl.text = j.getStringValue('catatan');
+        final mapelDb = j.getStringValue('mapel');
+        if (mapelDb.isNotEmpty) {
+          _mapelTerpilih = mapelDb;
+        }
         _jamTerpilih.clear();
         _jamTerpilih.addAll(_parseJam(j.getStringValue('jam')));
         for (final a in abs.items) {
@@ -455,6 +497,7 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
             'jam': jam.join(','),
             'materi': _materiCtrl.text.trim(),
             'catatan': _catatanCtrl.text.trim(),
+            'mapel': _mapelTerpilih ?? '',
           },
         );
 
@@ -490,6 +533,7 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
             'jam': jam.join(','),
             'materi': _materiCtrl.text.trim(),
             'catatan': _catatanCtrl.text.trim(),
+            'mapel': _mapelTerpilih ?? '',
           },
         );
         jurnalId = jurnal.id;
@@ -528,6 +572,7 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
           ),
           content: Text(
             'Kelas $namaKelas, jam ke-${jam.join(', ')}.\n'
+            'Mata Pelajaran: ${_mapelTerpilih ?? '-'}\n'
             'Materi: ${_materiCtrl.text.trim()}\n'
             '${_siswa.length} data absensi berhasil dicatat.',
             style: GoogleFonts.plusJakartaSans(height: 1.5),
@@ -731,7 +776,136 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Bagian 2: Materi & Catatan
+                  // Bagian 2: Mata Pelajaran (Fleksibel untuk guru >2 mapel)
+                  _Kartu(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const _JudulSeksi(
+                              'Mata Pelajaran',
+                              Icons.auto_stories_outlined,
+                            ),
+                            if (_guruMapelList.length > 1)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primarySoft,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${_guruMapelList.length} Mapel Anda',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primaryDark,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (_guruMapelList.isNotEmpty) ...[
+                          Text(
+                            'Pilih salah satu mata pelajaran yang Anda ampu:',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              color: AppColors.grey,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _guruMapelList.map((mp) {
+                              final dipilih = _mapelTerpilih == mp;
+                              return ChoiceChip(
+                                label: Text(mp),
+                                selected: dipilih,
+                                selectedColor: AppColors.primary,
+                                labelStyle: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: dipilih
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                  color: dipilih ? Colors.white : AppColors.ink,
+                                ),
+                                backgroundColor: const Color(0xFFF3F4F6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  side: BorderSide(
+                                    color: dipilih
+                                        ? AppColors.primaryDark
+                                        : Colors.transparent,
+                                  ),
+                                ),
+                                onSelected: (sel) {
+                                  if (sel) setState(() => _mapelTerpilih = mp);
+                                },
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        // Pilihan dropdown dari semua mapel sekolah
+                        DropdownButtonFormField<String>(
+                          key: ValueKey(_mapelTerpilih),
+                          isExpanded: true,
+                          initialValue: (_semuaMapel.contains(_mapelTerpilih))
+                              ? _mapelTerpilih
+                              : null,
+                          decoration: InputDecoration(
+                            labelText: _guruMapelList.isNotEmpty
+                                ? 'Atau pilih mata pelajaran lainnya'
+                                : 'Mata Pelajaran',
+                            prefixIcon: const Icon(Icons.school_outlined),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.line),
+                            ),
+                          ),
+                          hint: Text(
+                            _mapelTerpilih?.isNotEmpty == true
+                                ? _mapelTerpilih!
+                                : 'Pilih Mata Pelajaran',
+                            style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                          ),
+                          items: _semuaMapel
+                              .map(
+                                (m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(
+                                    m,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() => _mapelTerpilih = v);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Bagian 3: Materi & Catatan
                   _Kartu(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1002,6 +1176,21 @@ class _BarisSiswa extends StatelessWidget {
     'Alpa': 'A',
   };
 
+  static const _urutan = ['Hadir', 'Sakit', 'Izin', 'Alpa'];
+
+  void _geserStatus(bool maju) {
+    HapticFeedback.selectionClick();
+    final idx = _urutan.indexOf(status);
+    if (idx == -1) {
+      onPilih('Hadir');
+      return;
+    }
+    final nextIdx = maju
+        ? (idx + 1) % _urutan.length
+        : (idx - 1 + _urutan.length) % _urutan.length;
+    onPilih(_urutan[nextIdx]);
+  }
+
   Color _warna(String s) {
     switch (s) {
       case 'Hadir':
@@ -1110,46 +1299,69 @@ class _BarisSiswa extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
           const SizedBox(width: 4),
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: _pendek.entries.map((e) {
-                final aktif = status == e.key;
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onPilih(e.key),
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: aktif ? _warna(e.key) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: aktif
-                          ? [
-                              BoxShadow(
-                                color: _warna(e.key).withValues(alpha: 0.4),
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
-                              ),
-                            ]
-                          : null,
+          // Single Interactive Swipe/Tap Badge (Default H -> swipe/tap to S / I / A)
+          Tooltip(
+            message: 'Tap atau Geser horizontal untuk ubah status presensi',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _geserStatus(true),
+              onHorizontalDragEnd: (details) {
+                if ((details.primaryVelocity ?? 0) < -50) {
+                  _geserStatus(true);
+                } else if ((details.primaryVelocity ?? 0) > 50) {
+                  _geserStatus(false);
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: _warna(status),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _warna(status).withValues(alpha: 0.35),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
                     ),
-                    child: Text(
-                      e.value,
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.chevron_left_rounded,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      _pendek[status] ?? 'H',
                       style: GoogleFonts.plusJakartaSans(
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
-                        color: aktif ? Colors.white : AppColors.grey,
+                        color: Colors.white,
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
+                    const SizedBox(width: 4),
+                    Text(
+                      status,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        color: Colors.white.withValues(alpha: 0.95),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

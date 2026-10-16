@@ -5,6 +5,7 @@ import '../services/notifikasi.dart';
 import '../services/pb_service.dart';
 import '../theme/app_theme.dart';
 import 'chat/chat_list_screen.dart';
+import 'chat/chat_room_screen.dart';
 import 'home_screen.dart';
 import 'kejadian_form_screen.dart';
 import 'laporan_hub_screen.dart';
@@ -125,6 +126,75 @@ class _MainShellState extends State<MainShell> {
               namaPengirim: nama,
               isi: isi,
             );
+
+            // Banner notifikasi dalam aplikasi jika user sedang tidak di room tersebut
+            if (mounted && roomAktif != roomId) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: const Color(0xFF1E293B),
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  content: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2563EB),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.chat_bubble_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              nama,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              isi,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  action: SnackBarAction(
+                    label: 'Buka',
+                    textColor: const Color(0xFF38BDF8),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatRoomScreen(roomId: roomId),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            }
           }, expand: 'pengirim');
     } catch (_) {}
   }

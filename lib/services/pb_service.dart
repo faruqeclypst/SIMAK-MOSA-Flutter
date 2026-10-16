@@ -97,6 +97,15 @@ class PbService {
   bool get canLihatMonitoring =>
       isAdmin || isWaka || isKurikulum || isPiket || isAsrama;
 
+  /// Role yang berhak melihat ringkasan agregat KBM sekolah ("X dari 18 kelas terisi"):
+  /// Hanya piket, kurikulum, waka, dan admin (tidak untuk guru biasa dan satpam).
+  bool get canLihatMonitoringKelas =>
+      isAdmin || isWaka || isKurikulum || isPiket;
+
+  /// Hak akses modul keamanan gerbang & izin keluar kampus (Satpam, Piket, Asrama, Admin).
+  bool get canKelolaGerbang =>
+      isAdmin || isSatpam || isPiket || isAsrama;
+
   String get inisial {
     final n = nama.trim();
     if (n.isEmpty) return '?';

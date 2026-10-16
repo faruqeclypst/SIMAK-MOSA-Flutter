@@ -1,0 +1,16 @@
+{
+  "name": "simak-mosa",
+  "version": "1.0.0",
+  "description": "Sistem Informasi Manajemen & Monitoring Akademik SMAN Modal Bangsa",
+  "private": true,
+  "scripts": {
+    "release": "powershell -ExecutionPolicy Bypass -File ./release.ps1",
+    "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy-preview.ps1",
+    "deploy:fast": "powershell -ExecutionPolicy Bypass -File ./deploy-preview.ps1 -SkipBuild",
+    "apk": "flutter build apk --release",
+    "build:apk": "flutter build apk --release",
+    "build:web": "flutter build web --release",
+    "analyze": "flutter analyze",
+    "clean": "flutter clean"
+  }
+}
